@@ -11,10 +11,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from .iac_topoguard_ast import IaCTopoGuardAnalyzer, TopoGuardAuditReport
+from .nftables_generator_and_prover import (
+    NftablesGeneratorAndProver,
+    NftablesPolicySpec,
+)
 
 SEVERITY_COLOR = {
     "CRITICAL": "\033[91m",
@@ -105,12 +110,33 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="вернуть код 2, если инварианты нарушены (для CI)",
     )
+
+    prove = subparsers.add_parser(
+        "prove", help="синтезировать эталонный nftables.conf и доказать его корректность"
+    )
+    prove.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="куда записать сгенерированный ruleset (по умолчанию не писать)",
+    )
+    prove.add_argument("--json", action="store_true", help="вывести результат в JSON")
+    prove.add_argument(
+        "--ssh-rate",
+        type=int,
+        default=15,
+        help="порог rate-limit для SSH, подключений в минуту (по умолчанию 15)",
+    )
+    prove.add_argument(
+        "--print-ruleset",
+        action="store_true",
+        help="напечатать сгенерированный ruleset в stdout",
+    )
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Точка входа CLI. Возвращает код завершения процесса."""
-    args = build_parser().parse_args(argv)
+def _cmd_audit(args: argparse.Namespace) -> int:
+    """Выполняет подкоманду `audit`."""
     analyzer = IaCTopoGuardAnalyzer()
     target: Path = args.path
 
@@ -138,6 +164,37 @@ def main(argv: list[str] | None = None) -> int:
     if args.fail_on_violation and not report.is_compliant:
         return 2
     return 0
+
+
+def _cmd_prove(args: argparse.Namespace) -> int:
+    """Выполняет подкоманду `prove`: синтез политики и её доказательство."""
+    spec = NftablesPolicySpec(ssh_rate_per_minute=args.ssh_rate)
+    prover = NftablesGeneratorAndProver()
+    result = prover.prove_ruleset(spec)
+
+    if args.out is not None:
+        prover.write_ruleset(args.out, spec)
+
+    if args.json:
+        payload = result.to_dict()
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(prover.proof_report(result))
+        if args.out is not None:
+            print(f"  ruleset written ...... {args.out}")
+        if args.print_ruleset:
+            print()
+            print(result.generated_ruleset)
+
+    return 0 if result.is_proven else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Точка входа CLI. Возвращает код завершения процесса."""
+    args = build_parser().parse_args(argv)
+    if args.command == "prove":
+        return _cmd_prove(args)
+    return _cmd_audit(args)
 
 
 if __name__ == "__main__":  # pragma: no cover
