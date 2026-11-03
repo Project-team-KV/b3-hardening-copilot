@@ -62,6 +62,12 @@ python -m topoguard audit tests/fixtures/insecure
 
 # 4. Аудит эталонного узла (используется в CI как smoke-тест)
 python -m topoguard audit tests/fixtures/hardened --fail-on-violation
+
+# 5. Синтез и доказательство эталонной политики nftables
+python -m topoguard prove --out build/nftables.conf
+
+# 6. Сквозное демо всех четырёх подсистем Роли 2
+python scripts/demo_b3.py --json build/demo.json
 ```
 
 Пример вывода на уязвимой конфигурации:
@@ -88,22 +94,36 @@ TopoGuard audit :: tests\fixtures\insecure
 
 ```
 .
+├── flake.nix                             # NixOS 25.11: VM 301..304 + devShell
+├── nixos/
+│   ├── common.nix                        # база стенда, статическая адресация
+│   ├── hardening-baseline.nix            # sysctl, auditd, sshd, изоляция служб
+│   ├── vm-301-copilot-gpu.nix            # RTX 5080 passthrough, vLLM, Qdrant
+│   ├── vm-302-vulnerable-target.nix      # намеренно уязвимый LAPP-стенд
+│   ├── vm-303-hardened-canary.nix        # компиляторная Canary-песочница
+│   └── vm-304-audit-server.nix           # PostgreSQL 16, Prometheus, Grafana
 ├── src/
 │   ├── topoguard/
 │   │   ├── iac_topoguard_ast.py          # граф достижимости, 5 инвариантов, k31
 │   │   ├── nftables_generator_and_prover.py
-│   │   └── cli.py                        # python -m topoguard audit <path>
+│   │   └── cli.py                        # python -m topoguard audit|prove
 │   ├── runtime/
 │   │   └── ebpf_systemd_sandbox_enforcer.py
 │   └── crypto/
 │       └── streebog_rollback_ledger.py
 ├── migrations/
 │   └── 001_hardening_ledger.sql
+├── scripts/
+│   └── demo_b3.py                        # сквозной прогон всех подсистем
 ├── tests/
 │   ├── fixtures/
 │   │   ├── insecure/                     # уязвимый узел
-│   │   └── hardened/                     # эталонный узел
-│   └── test_topoguard.py
+│   │   ├── hardened/                     # эталонный узел
+│   │   └── systemd-analyze-security.txt
+│   ├── test_topoguard.py
+│   ├── test_nftables_prover.py
+│   ├── test_sandbox_enforcer.py
+│   └── test_streebog_ledger.py
 └── pyproject.toml
 ```
 
@@ -125,7 +145,8 @@ TopoGuard audit :: tests\fixtures\insecure
 | `nftables_generator_and_prover.py` | B3-12, B3-14 | ✅ реализован, round-trip `k31 = 1.0` |
 | `ebpf_systemd_sandbox_enforcer.py` | B3-16 | ✅ реализован, 51 тест |
 | `streebog_rollback_ledger.py` + SQL | B3-18 | ✅ реализован, векторы ГОСТ сошлись |
-| NixOS flake + VM 301..304 | B3-02, B3-04 | 🚧 в работе |
+| NixOS flake + VM 301..304 | B3-02, B3-04 | ✅ реализован, `nix flake check` в CI |
+| Сквозное демо `scripts/demo_b3.py` | B3-34, B3-36 | ✅ прогон зелёный |
 
 ## Лицензия
 

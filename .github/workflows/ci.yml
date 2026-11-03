@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run unit and integration tests
+        run: pytest -q
+
+      - name: Smoke-test TopoGuard on vulnerable fixture
+        shell: bash
+        run: |
+          python -m topoguard audit tests/fixtures/insecure || true
+          python -m topoguard audit tests/fixtures/hardened --fail-on-violation
+
+      - name: Prove generated nftables policy (round-trip k31)
+        run: python -m topoguard prove --out build/nftables.conf
+
+  nftables-syntax:
+    name: nft --check on generated ruleset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nftables and Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nftables python3 python3-pip
+          python3 -m pip install -e .
+
+      - name: Generate policy
+        run: python -m topoguard prove --out build/nftables.conf
+
+      - name: Validate with kernel parser
+        run: |
+          sudo nft --check --json -f build/nftables.conf
+
+  nix-flake:
+    name: nix flake check
+    runs-on: ubuntu-latest
+    # Включается после первого прогона на стенде PC-10: конфигурации VM
+    # требуют nixpkgs 25.11 и не собираются в эфемерном раннере.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Evaluate flake
+        run: nix flake check --no-build --all-systems
