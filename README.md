@@ -22,10 +22,16 @@ Sense  ->  Triage & Synthesize  ->  Canary Dry-Run  ->  Transactional Apply
 
 | Слой | Назначение | Модули |
 |------|------------|--------|
-| 1. Sense | Детерминированный съём телеметрии, дерево Меркла SHA-256, дрейф за O(log K) | `src/scanner/linux_state_collector.py` |
+| 1. Sense | Детерминированный съём телеметрии, дерево Меркла SHA-256, дрейф за O(log K) | *зона Роли 1 — добавляется отдельным этапом* |
 | 2. Triage | Граф сетевой достижимости, сжатие предупреждений, показатель k31 | `src/topoguard/iac_topoguard_ast.py` |
-| 3. Verify | Компиляторная проверка патчей в Canary-песочнице, Anti-Lockout Guard | `src/remediation/canary_verifier.py`, `src/remediation/langgraph_hardening_agent.py` |
+| 3. Verify | Компиляторная проверка патчей в Canary-песочнице, Anti-Lockout Guard | `src/topoguard/nftables_generator_and_prover.py` |
 | 4. Commit | Криптографический журнал ревизий по ГОСТ Р 34.11-2012 и атомарный откат | `src/crypto/streebog_rollback_ledger.py`, `migrations/001_hardening_ledger.sql` |
+
+> **Статус репозитория.** Здесь собрана Роль 2 (Вебер А. А.): анализ сетевой
+> достижимости, синтез и верификация политик nftables, изоляция служб,
+> журнал ревизий и откат. Модули Роли 1 (сбор телеметрии, дерево Меркла,
+> маппинг ФСТЭК, синтез патчей) добавляются в `src/scanner/` и
+> `src/remediation/` отдельным этапом.
 
 ## Ключевая идея TopoGuard
 

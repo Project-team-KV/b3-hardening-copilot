@@ -48,3 +48,11 @@ desktop.ini
 *.tar.gz
 *.qcow2
 *.log
+
+# Результаты сборки отчёта
+docs/report/out/
+
+
+# Результаты сборки презентации
+docs/presentation/out/
+
