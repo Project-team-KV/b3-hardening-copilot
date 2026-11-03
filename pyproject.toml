@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "b3-hardening-copilot"
+version = "0.1.0"
+description = "Autonomous Linux & NixOS Hardening Copilot — IaC TopoGuard, OpenSCAP/Lynis, osquery Merkle Tree, CIS/ФСТЭК № 21/117"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Кожемякин Дмитрий Николаевич", email = "kwerel@users.noreply.github.com" },
+    { name = "Вебер Александр Александрович", email = "mbr_DIGMA_PRO_Sprint@users.noreply.github.com" },
+]
+keywords = ["security", "hardening", "nixos", "nftables", "fstec", "openscap", "osquery"]
+
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

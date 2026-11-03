@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: b3-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hardening_ledger
+      POSTGRES_USER: secops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
