@@ -345,7 +345,9 @@ class TestTransactionalHardening:
         ledger = StreebogRollbackLedger()
 
         def slow_rollback():
-            time.sleep(0.02)
+            # Заметно больше разрешения системного таймера Windows (~15,6 мс),
+            # иначе замер получается нестабильным.
+            time.sleep(0.08)
 
         entry = ledger.execute_transactional_hardening(
             tx_id="tx_rb",
@@ -357,7 +359,8 @@ class TestTransactionalHardening:
             healthcheck_fn=lambda: False,
             rollback_fn=slow_rollback,
         )
-        assert entry.rollback_duration_ms >= 15
+        assert entry.rollback_duration_ms is not None
+        assert entry.rollback_duration_ms >= 50
 
 
 # ---------------------------------------------------------------------------
