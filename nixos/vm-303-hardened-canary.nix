@@ -38,6 +38,13 @@
     "d /var/log/b3-canary        0750 canary users -"
   ];
 
+  # Экспортёр метрик узла: Prometheus на VM 304 опрашивает порт 9100.
+  services.prometheus.exporters.node = {
+    enable = true;
+    listenAddress = "10.30.1.33";
+    port = 9100;
+  };
+
   # Ограничение ресурсов, чтобы сбойный патч не уронил узел.
   systemd.slices.b3-canary = {
     description = "B3 Canary verification slice";

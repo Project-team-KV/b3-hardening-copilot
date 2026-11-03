@@ -50,5 +50,12 @@
     "d /var/lib/b3-demo 0755 root root -"
   ];
 
+  # Экспортёр метрик узла: Prometheus на VM 304 опрашивает порт 9100.
+  services.prometheus.exporters.node = {
+    enable = true;
+    listenAddress = "10.30.1.32";
+    port = 9100;
+  };
+
   system.stateVersion = "25.11";
 }

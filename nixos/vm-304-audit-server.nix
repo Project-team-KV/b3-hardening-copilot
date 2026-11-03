@@ -41,7 +41,10 @@
         ];
       }
       {
-        job_name = "topoguard";
+        # Метрики сервера инференса vLLM (порт 8000 на VM 301).
+        # Сам TopoGuard — консольная программа без HTTP-интерфейса и своих
+        # метрик не отдаёт, поэтому задача названа по фактическому источнику.
+        job_name = "vllm";
         metrics_path = "/metrics";
         static_configs = [ { targets = [ "10.30.1.31:8000" ]; } ];
       }
@@ -87,6 +90,13 @@
   systemd.tmpfiles.rules = [
     "d /var/backup/postgresql 0700 postgres postgres -"
   ];
+
+  # Экспортёр метрик узла: Prometheus опрашивает порт 9100 на всех машинах стенда.
+  services.prometheus.exporters.node = {
+    enable = true;
+    listenAddress = "10.30.1.34";
+    port = 9100;
+  };
 
   system.stateVersion = "25.11";
 }
