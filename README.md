@@ -123,9 +123,9 @@ TopoGuard audit :: tests\fixtures\insecure
 |--------|-----------|--------|
 | `iac_topoguard_ast.py` | B3-06, B3-08, B3-10 | ✅ реализован, 44 теста |
 | `nftables_generator_and_prover.py` | B3-12, B3-14 | ✅ реализован, round-trip `k31 = 1.0` |
-| `ebpf_systemd_sandbox_enforcer.py` | B3-16 | 🚧 в работе |
-| `streebog_rollback_ledger.py` + SQL | B3-18 | ⏳ запланирован |
-| NixOS flake + VM 301..304 | B3-02, B3-04 | ⏳ запланирован |
+| `ebpf_systemd_sandbox_enforcer.py` | B3-16 | ✅ реализован, 51 тест |
+| `streebog_rollback_ledger.py` + SQL | B3-18 | ✅ реализован, векторы ГОСТ сошлись |
+| NixOS flake + VM 301..304 | B3-02, B3-04 | 🚧 в работе |
 
 ## Лицензия
 

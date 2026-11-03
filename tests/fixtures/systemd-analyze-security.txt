@@ -1,0 +1,7 @@
+  NAME                                                        DESCRIPTION                                                              EXPOSURE
+✓ systemd-journald.service                                     Journal Service                                                          1.4 OK
+✓ sshd.service                                                 OpenSSH Daemon                                                           2.1 OK
+✗ nginx.service                                                A high performance web server and a reverse proxy server                 9.6 UNSAFE
+✗ postgresql.service                                           PostgreSQL Database Server                                               7.9 EXPOSED
+✗ legacy-telemetry-agent.service                               Legacy Telemetry Agent                                                   9.2 UNSAFE
+✗ cups.service                                                 CUPS Scheduler                                                           6.2 MEDIUM
