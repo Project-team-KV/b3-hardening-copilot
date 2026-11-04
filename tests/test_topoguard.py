@@ -400,3 +400,100 @@ def test_attack_path_route_format():
         severity="CRITICAL",
     )
     assert edge.as_route() == "0.0.0.0/0 (Internet) -> [input] -> tcp/5432 (CRITICAL)"
+
+
+# ---------------------------------------------------------------------------
+# Регрессионные тесты на найденные дефекты
+# ---------------------------------------------------------------------------
+class TestAnalyzerRegressions:
+    """Дефекты, найденные при ревью: ложные «защищено» и потеря диапазонов."""
+
+    def test_port_range_is_recorded(self, analyzer):
+        """Диапазон 1000-2000 сохраняется, а не обрезается до 1000."""
+        text = """
+        table inet filter {
+            chain input { policy drop; tcp dport 1000-2000 accept; }
+        }
+        """
+        _, _, _, rules = analyzer.parse_nftables_ast(text)
+        assert rules[0].dst_port_ranges == ((1000, 2000),)
+
+    @pytest.mark.parametrize(
+        "port, expected",
+        [(999, False), (1000, True), (1500, True), (2000, True), (2001, False)],
+    )
+    def test_port_range_membership(self, analyzer, port, expected):
+        """Порт внутри диапазона считается покрытым правилом."""
+        text = """
+        table inet filter {
+            chain input { policy drop; tcp dport 1000-2000 accept; }
+        }
+        """
+        _, _, _, rules = analyzer.parse_nftables_ast(text)
+        assert rules[0].matches_port(port) is expected
+
+    def test_port_range_detected_as_exposure(self, analyzer):
+        """Открытый диапазон, накрывающий SSH, даёт маршрут атаки."""
+        text = """
+        table inet filter {
+            chain input { policy accept; tcp dport 1000-2000 accept; }
+        }
+        """
+        report = analyzer.analyze_topology(text)
+        assert any(e.target_port == 22 for e in report.unrestricted_mgmt_exposures)
+
+    def test_update_blocklist_is_not_rate_limit(self, analyzer):
+        """``update @набор`` — запись в блок-лист, а не ограничение частоты."""
+        text = """
+        table inet filter {
+            chain input {
+                policy drop;
+                tcp dport 22 ct state new update @blocklist { ip saddr } accept
+            }
+        }
+        """
+        _, _, _, rules = analyzer.parse_nftables_ast(text)
+        assert rules[0].has_rate_limit is False
+        report = analyzer.analyze_topology(text)
+        assert any(e.target_port == 22 for e in report.unrestricted_mgmt_exposures)
+
+    def test_limit_rate_still_detected(self, analyzer):
+        """Настоящий rate-limit по-прежнему распознаётся."""
+        text = """
+        table inet filter {
+            chain input {
+                policy drop;
+                tcp dport 22 update @lim { ip saddr limit rate 3/minute } accept
+            }
+        }
+        """
+        _, _, _, rules = analyzer.parse_nftables_ast(text)
+        assert rules[0].has_rate_limit is True
+
+    def test_commented_mss_rule_is_not_protection(self, analyzer):
+        """Закомментированное правило MSS Clamping не считается защитой."""
+        text = """
+        table inet filter {
+            chain input {
+                policy drop;
+                tcp dport 22 accept
+                # tcp flags syn tcp option maxseg size set rt mtu
+            }
+        }
+        """
+        report = analyzer.analyze_topology(text, wireguard_conf="MTU = 1420")
+        assert report.mss_clamping_ok is False
+
+    def test_active_mss_rule_is_protection(self, analyzer):
+        """Активное правило MSS Clamping защитой считается."""
+        text = """
+        table inet filter {
+            chain input {
+                policy drop;
+                tcp dport 22 accept
+                tcp flags syn tcp option maxseg size set rt mtu
+            }
+        }
+        """
+        report = analyzer.analyze_topology(text, wireguard_conf="MTU = 1420")
+        assert report.mss_clamping_ok is True

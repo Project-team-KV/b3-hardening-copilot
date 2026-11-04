@@ -59,6 +59,15 @@ class FirewallRuleNode:
     has_rate_limit: bool
     referenced_set: str | None
     raw_line: str
+    #: Диапазоны портов вида ``1000-2000``. Хранятся отдельно от ``dst_ports``,
+    #: чтобы не разворачивать тысячи значений в кортеж.
+    dst_port_ranges: tuple[tuple[int, int], ...] = ()
+
+    def matches_port(self, port: int) -> bool:
+        """Попадает ли порт под действие правила (с учётом диапазонов)."""
+        if port in self.dst_ports:
+            return True
+        return any(low <= port <= high for low, high in self.dst_port_ranges)
 
     @property
     def is_permit(self) -> bool:
@@ -163,7 +172,7 @@ class IaCTopoGuardAnalyzer:
 
     SET_REF_RE = re.compile(r"@([a-zA-Z0-9_.\-]+)")
     PORT_LIST_RE = re.compile(
-        r"(?:tcp|udp|th)\s+dport\s+(?:\{([^}]+)\}|(\d+))", re.IGNORECASE
+        r"(?:tcp|udp|th)\s+dport\s+(?:\{([^}]+)\}|(\d+(?:-\d+)?))", re.IGNORECASE
     )
     SRC_IPV4_RE = re.compile(
         r"\bip\s+saddr\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(?:/[0-9]+)?)", re.IGNORECASE
@@ -173,7 +182,9 @@ class IaCTopoGuardAnalyzer:
     )
     INCLUDE_RE = re.compile(r'^\s*include\s+"([^"]+)"', re.MULTILINE)
     POLICY_RE = re.compile(r"\bpolicy\s+(accept|drop)\s*;", re.IGNORECASE)
-    RATE_LIMIT_RE = re.compile(r"\b(limit\s+rate|meter\b|update\s+@)", re.IGNORECASE)
+    #: Ограничение частоты. ``update @набор`` сюда НЕ входит: это запись в
+    #: блок-лист, а не rate-limit, и принимать её за защиту нельзя.
+    RATE_LIMIT_RE = re.compile(r"\b(limit\s+rate|meter\b)", re.IGNORECASE)
 
     # ------------------------------------------------------------------
     # Разбор структуры nftables
@@ -296,8 +307,10 @@ class IaCTopoGuardAnalyzer:
             chain_policies[chain_name.lower()] = (
                 pol_match.group(1).lower() if pol_match else "accept"
             )
-            for raw_line in body.splitlines():
-                rule = self._parse_rule_line(raw_line, chain_name)
+            # Инструкции в nftables разделяются переводом строки ИЛИ точкой с
+            # запятой, поэтому одного splitlines() недостаточно.
+            for statement in re.split(r"[\n;]", body):
+                rule = self._parse_rule_line(statement, chain_name)
                 if rule is not None:
                     rules.append(rule)
 
@@ -318,12 +331,19 @@ class IaCTopoGuardAnalyzer:
             return None
 
         ports: list[int] = []
+        port_ranges: list[tuple[int, int]] = []
         port_match = self.PORT_LIST_RE.search(line)
         if port_match:
             raw_ports = port_match.group(1) or port_match.group(2) or ""
             for token in raw_ports.split(","):
                 tok = token.strip()
-                if tok.isdigit():
+                range_match = re.fullmatch(r"(\d+)-(\d+)", tok)
+                if range_match:
+                    low = int(range_match.group(1))
+                    high = int(range_match.group(2))
+                    if 0 < low <= high <= 65535:
+                        port_ranges.append((low, high))
+                elif tok.isdigit():
                     ports.append(int(tok))
 
         proto = "tcp"
@@ -362,6 +382,7 @@ class IaCTopoGuardAnalyzer:
             has_rate_limit=bool(self.RATE_LIMIT_RE.search(line)),
             referenced_set=ref_set,
             raw_line=line,
+            dst_port_ranges=tuple(sorted(port_ranges)),
         )
 
     @staticmethod
@@ -475,7 +496,9 @@ class IaCTopoGuardAnalyzer:
         protected = 0
 
         for port in sorted(set(exposed_ports)):
-            port_rules = [r for r in rules if r.chain == "input" and port in r.dst_ports]
+            port_rules = [
+                r for r in rules if r.chain == "input" and r.matches_port(port)
+            ]
             accepts = [r for r in port_rules if r.is_permit]
 
             if port in PUBLIC_BUSINESS_PORTS:
@@ -610,7 +633,9 @@ class IaCTopoGuardAnalyzer:
             rules, declared_sets, empty_static_sets
         )
         docker_bypass = self._check_docker_bypass(docker_enabled, chain_policies)
-        wg_mtu_ok, mss_ok = self._check_wireguard(wireguard_conf, nft_text)
+        wg_mtu_ok, mss_ok = self._check_wireguard(
+            wireguard_conf, self._strip_comments(nft_text)
+        )
 
         exposures, protected = self._scan_exposures(
             rules=rules,

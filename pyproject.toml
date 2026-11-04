@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "b3-hardening-copilot"
 version = "0.1.0"
-description = "Autonomous Linux & NixOS Hardening Copilot — IaC TopoGuard, OpenSCAP/Lynis, osquery Merkle Tree, CIS/ФСТЭК № 21/117"
+description = "Автономный помощник по укреплению безопасности систем Linux и NixOS — IaC TopoGuard, OpenSCAP/Lynis, дерево Меркла в osquery, соответствие стандартам CIS / требованиям ФСТЭК (приказы № 21, № 117)"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
-    { name = "Кожемякин Дмитрий Николаевич", email = "kwerel@users.noreply.github.com" },
-    { name = "Вебер Александр Александрович", email = "mbr_DIGMA_PRO_Sprint@users.noreply.github.com" },
+    { name = "Кожемякин Дмитрий Николаевич", email = "d78384526@gmail.com" },
+    { name = "Вебер Александр Александрович", email = "a_veber.yanao@mail.ru" },
 ]
 keywords = ["security", "hardening", "nixos", "nftables", "fstec", "openscap", "osquery"]
 
