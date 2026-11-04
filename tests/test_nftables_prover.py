@@ -236,4 +236,95 @@ def test_default_spec_matches_team_b3_baseline():
     assert spec.ssh_port == 22
     assert spec.public_tcp_ports == (80, 443)
     assert spec.internal_db_ports == (5432, 9090, 9100)
-    Path  # noqa: B018 - явная ссылка на импорт для читаемости
+
+
+# ---------------------------------------------------------------------------
+# Регрессионные тесты на дефекты, найденные при ревью
+# ---------------------------------------------------------------------------
+class TestProverRegressions:
+    """Дефекты: невалидный файл при пустых портах и слабая структурная проверка."""
+
+    def test_empty_public_ports_produce_no_empty_set(self, prover):
+        """Пустой список публичных портов не порождает 'dport {  }'."""
+        generated = prover.generate_ruleset(
+            NftablesPolicySpec(public_tcp_ports=())
+        )
+        assert "{  }" not in generated
+        assert prover.structural_validate(generated) == []
+
+    def test_empty_internal_ports_produce_no_empty_set(self, prover):
+        """Пустой список внутренних портов не порождает 'dport {  }'."""
+        generated = prover.generate_ruleset(
+            NftablesPolicySpec(internal_db_ports=())
+        )
+        assert "{  }" not in generated
+        assert prover.structural_validate(generated) == []
+
+    def test_both_lists_empty_is_proven(self, prover):
+        """Спецификация без портов даёт валидный файл, а не ложный PROVEN."""
+        result = prover.prove_ruleset(
+            NftablesPolicySpec(public_tcp_ports=(), internal_db_ports=())
+        )
+        assert "{  }" not in result.generated_ruleset
+        assert result.syntax_valid is True
+
+    def test_structural_validate_requires_drop_in_input(self, prover):
+        """policy drop в output не заменяет drop в input."""
+        text = """
+        flush ruleset
+        table inet filter {
+            chain input {
+                type filter hook input priority 0; policy accept;
+                ct state established,related accept
+            }
+            chain output {
+                type filter hook output priority 0; policy drop;
+            }
+        }
+        """
+        issues = prover.structural_validate(text)
+        assert any("input" in i and "drop" in i for i in issues)
+
+    def test_structural_validate_accepts_correct_policy(self, prover):
+        """Корректная политика проходит проверку."""
+        text = """
+        flush ruleset
+        table inet filter {
+            chain input {
+                type filter hook input priority 0; policy drop;
+                ct state established,related accept
+            }
+        }
+        """
+        assert prover.structural_validate(text) == []
+
+    def test_structural_validate_detects_empty_port_set(self, prover):
+        """Пустое множество портов обнаруживается структурной проверкой."""
+        text = """
+        flush ruleset
+        table inet filter {
+            chain input {
+                policy drop;
+                tcp dport {  } accept
+                ct state established,related accept
+            }
+        }
+        """
+        issues = prover.structural_validate(text)
+        assert any("пустое множество" in i for i in issues)
+
+    @pytest.mark.parametrize("cidr", ["10.30.1.0/99", "300.1.1.0/24", "10.30.1/24"])
+    def test_invalid_cidr_rejected(self, cidr):
+        """Некорректный префикс или октеты отвергаются."""
+        with pytest.raises(ValueError, match="CIDR"):
+            NftablesPolicySpec(trusted_admin_cidr=cidr).validate()
+
+    def test_ssh_port_not_duplicated_in_public(self, prover):
+        """SSH-порт не дублируется в наборе публичных портов."""
+        generated = prover.generate_ruleset(
+            NftablesPolicySpec(ssh_port=443, public_tcp_ports=(443, 8443))
+        )
+        public_rules = [ln for ln in generated.splitlines() if "dport { 8443" in ln]
+        assert public_rules, "правило для 8443 должно остаться"
+        assert "dport { 443, 8443 }" not in generated
+        assert prover.structural_validate(generated) == []
