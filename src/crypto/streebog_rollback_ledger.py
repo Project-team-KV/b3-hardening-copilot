@@ -103,8 +103,11 @@ def _canonical_json(payload: Any) -> bytes:
 
 def _is_hex64(value: str) -> bool:
     """Проверяет, что строка является 64-символьным hex-дайджестом."""
+    # База данных проверяет дайджесты выражением '^[0-9a-f]{64}$', поэтому
+    # верхний регистр отвергается и здесь — иначе запись пройдёт в журнал,
+    # а при выгрузке в PostgreSQL упадёт на ограничении CHECK.
     return isinstance(value, str) and len(value) == 64 and all(
-        ch in "0123456789abcdef" for ch in value.lower()
+        ch in "0123456789abcdef" for ch in value
     )
 
 

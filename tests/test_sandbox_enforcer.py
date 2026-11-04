@@ -222,9 +222,19 @@ class TestExposureScore:
         assert profile.verdict_after == "OK"
 
     def test_never_below_floor(self, enforcer):
+        """Оценка не опускается ниже разумного минимума."""
         req = ServiceSandboxRequirements(unit_name="tiny.service", initial_exposure_score=1.0)
         generated = enforcer.generate_sandbox_profile(req)
-        assert generated.estimated_score_after >= 1.1
+        assert generated.estimated_score_after >= 1.0
+
+    @pytest.mark.parametrize("initial", [0.0, 0.3, 0.5, 0.9])
+    def test_already_hardened_service_not_worsened(self, enforcer, initial):
+        """Служба с низкой оценкой после «укрепления» не становится хуже."""
+        req = ServiceSandboxRequirements(
+            unit_name="safe.service", initial_exposure_score=initial
+        )
+        generated = enforcer.generate_sandbox_profile(req)
+        assert generated.estimated_score_after <= initial
 
     def test_is_hardened_property(self, profile):
         assert profile.is_hardened is True

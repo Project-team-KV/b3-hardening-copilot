@@ -140,20 +140,23 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     analyzer = IaCTopoGuardAnalyzer()
     target: Path = args.path
 
+    # Принудительное включение проверки Docker не должно терять остальные
+    # конфигурации (WireGuard, iptables) — раньше здесь пересобирался отчёт
+    # только по nftables, из-за чего два нарушения исчезали из вывода.
+    docker_override = True if args.docker else None
+
+    if not target.exists():
+        print(f"путь не найден: {target}", file=sys.stderr)
+        return 2
+
     if target.is_dir():
-        report = analyzer.analyze_directory(target)
-        if args.docker:
-            nft = "\n".join(
-                p.read_text(encoding="utf-8", errors="replace")
-                for p in sorted(target.rglob("nftables.conf"))
-            )
-            report = analyzer.analyze_topology(
-                nft_text=nft, docker_enabled=True, base_dir=target
-            )
+        report = analyzer.analyze_directory(target, docker_enabled=docker_override)
     else:
         text = target.read_text(encoding="utf-8", errors="replace")
         report = analyzer.analyze_topology(
-            nft_text=text, docker_enabled=args.docker, base_dir=target.parent
+            nft_text=text,
+            docker_enabled=bool(docker_override),
+            base_dir=target.parent,
         )
 
     if args.json:

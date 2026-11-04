@@ -678,8 +678,16 @@ class IaCTopoGuardAnalyzer:
     # ------------------------------------------------------------------
     # Удобные обёртки для CLI и демо
     # ------------------------------------------------------------------
-    def analyze_directory(self, directory: Path | str) -> TopoGuardAuditReport:
-        """Аудит каталога с конфигурациями узла (``nftables.conf``, ``*.rules``, ``wg*.conf``)."""
+    def analyze_directory(
+        self, directory: Path | str, docker_enabled: bool | None = None
+    ) -> TopoGuardAuditReport:
+        """Аудит каталога с конфигурациями узла (``nftables.conf``, ``*.rules``, ``wg*.conf``).
+
+        Args:
+            directory: каталог с конфигурациями.
+            docker_enabled: принудительно включить проверку Docker; ``None``
+                означает автоопределение по наличию compose-файла.
+        """
         root = Path(directory)
         nft_parts: list[str] = []
         wg_conf = ""
@@ -695,10 +703,11 @@ class IaCTopoGuardAnalyzer:
                 iptables += text + "\n"
             elif path.name.startswith("wg") and suffix == ".conf":
                 wg_conf = text
-        docker_enabled = any(
-            p.name in {"docker-compose.yml", "docker-compose.yaml", "daemon.json"}
-            for p in root.rglob("*")
-        )
+        if docker_enabled is None:
+            docker_enabled = any(
+                p.name in {"docker-compose.yml", "docker-compose.yaml", "daemon.json"}
+                for p in root.rglob("*")
+            )
         return self.analyze_topology(
             nft_text="\n".join(nft_parts),
             wireguard_conf=wg_conf,

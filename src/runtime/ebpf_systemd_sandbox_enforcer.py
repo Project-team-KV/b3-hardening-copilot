@@ -289,10 +289,19 @@ int BPF_PROG(b3_protect_sensitive_files, struct file *file, int ret)
     # Генерация профиля
     # ------------------------------------------------------------------
     def _estimate_score(self, requirements: ServiceSandboxRequirements) -> float:
-        """Оценивает остаточную экспозицию после применения профиля."""
+        """Оценивает остаточную экспозицию после применения профиля.
+
+        Нижняя граница не может превышать исходную оценку: иначе уже
+        защищённая служба (например, с баллом 0,5) после «укрепления»
+        стала бы выглядеть хуже, чем была.
+        """
         total_reduction = sum(self.DIRECTIVE_RISK_REDUCTION.values())
-        raw = requirements.initial_exposure_score - total_reduction * self.EFFECTIVENESS_COEFFICIENT
-        return round(max(1.1, raw), 2)
+        raw = (
+            requirements.initial_exposure_score
+            - total_reduction * self.EFFECTIVENESS_COEFFICIENT
+        )
+        floor = min(1.1, requirements.initial_exposure_score)
+        return round(max(floor, raw), 2)
 
     @staticmethod
     def _verdict_for(score: float) -> str:

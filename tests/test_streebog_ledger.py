@@ -190,6 +190,13 @@ class TestRecordRevision:
         with pytest.raises(ValueError, match="merkle_root_before"):
             ledger.record_revision("tx_1", "host", "not-a-hash", ROOT_B, {})
 
+    @pytest.mark.parametrize("bad_root", ["A" * 64, "a" * 63, "a" * 65, "z" * 64])
+    def test_non_lowercase_or_wrong_length_root_rejected(self, bad_root):
+        """Верхний регистр отвергается: ограничение БД требует нижний."""
+        ledger = StreebogRollbackLedger()
+        with pytest.raises(ValueError, match="hex"):
+            ledger.record_revision("tx_1", "host", bad_root, ROOT_B, {})
+
     def test_patch_bundle_canonicalisation(self):
         """Порядок ключей не влияет на хеш патча."""
         one = StreebogRollbackLedger()
